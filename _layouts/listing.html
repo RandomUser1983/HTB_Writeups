@@ -1,0 +1,15 @@
+---
+layout: default
+---
+<nav class="section-nav">
+  {% unless page.title == "HTB Writeups" %}<a href="{{ '/' | relative_url }}">Home</a>{% endunless %}
+  {% unless page.title == "Machines" %}<a href="{{ '/machines/' | relative_url }}">Machines</a>{% endunless %}
+  {% unless page.title == "Challenges" %}<a href="{{ '/challenges/' | relative_url }}">Challenges</a>{% endunless %}
+  {% unless page.title == "ProLabs" %}<a href="{{ '/prolabs/' | relative_url }}">Prolabs</a>{% endunless %}
+</nav>
+<h1>{{ page.title }}</h1>
+{{ content }}
+<style>
+.section-nav { display: flex; gap: 1.2rem; margin-bottom: 1.5rem; }
+.section-nav a { font-size: .95rem; }
+</style>

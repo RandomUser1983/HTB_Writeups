@@ -1,0 +1,39 @@
+title: HTB Writeups
+author: RandomUsr
+url: https://randomuser1983.github.io
+baseurl: /HTB_Writeups
+description: > 
+  Hack The Box writeups and walkthroughs. 
+  Technical documentation, methodologies and tools used to solve challenges.
+permalink: /:slug
+favicon: "./logo.png"
+twitter:
+    username: 
+    card: summary_large_image
+remote_theme: abhinavs/moonwalk
+theme_config:
+  appearance: "dark"
+  appearance_toggle: false
+  back_home_text: "home.."
+  date_format: "%Y-%m-%d"
+  show_description: true
+  show_navbar: true
+  show_footer: false
+  show_copyright: true
+  show_projects: true
+  show_blog: true
+  show_old_projects: false
+  show_misc_list: false
+  show_reading_time: true
+  show_tags: true
+  home:
+    title_blog: All Writeups
+    title_old_projects: Archive
+soopr:
+  publish_token: ""
+highlighter: rouge
+sass:
+  style: :compressed
+plugins:
+  - jekyll-feed
+  - jekyll-soopr-seo-tag
