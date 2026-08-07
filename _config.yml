@@ -7,6 +7,12 @@ description: >
   Technical documentation, methodologies and tools used to solve challenges.
 permalink: /:slug
 future: true
+defaults:
+  - scope:
+      path: ""
+      type: posts
+    values:
+      layout: post
 favicon: "./logo.png"
 twitter:
     username: 

@@ -1,0 +1,20 @@
+{% assign current = include.current %}
+<nav class="site-header">
+  <a href="{{ site.baseurl }}/" class="logo">
+    <svg viewBox="0 0 64 64" width="22" height="22" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 40c6-2 10-8 10-14 0-9 7-16 16-16 5 0 9 2 12 5l10-3-4 9c2 3 3 7 3 11 0 12-10 21-22 21-4 0-8-1-11-3l-9 3 3-8c-3-1-6-3-8-5z" />
+    </svg>
+  </a>
+
+  <nav class="site-nav">
+    {% unless current == "home" %}<a href="{{ site.baseurl }}/">Home</a>{% endunless %}
+    {% unless current == "machines" %}<a href="{{ site.baseurl }}/machines/">Machines</a>{% endunless %}
+    {% unless current == "challenges" %}<a href="{{ site.baseurl }}/challenges/">Challenges</a>{% endunless %}
+    {% unless current == "prolabs" %}<a href="{{ site.baseurl }}/prolabs/">ProLabs</a>{% endunless %}
+    {% unless current == "hackinator" %}<a href="{{ site.baseurl }}/hackinator/">Hackinator</a>{% endunless %}
+  </nav>
+
+  <div class="social">
+    <!-- github / linkedin / mail icons: added later -->
+  </div>
+</nav>

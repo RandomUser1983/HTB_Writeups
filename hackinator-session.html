@@ -1,0 +1,337 @@
+---
+layout: none
+title: Hackinator — Sessione
+permalink: /hackinator/session/
+---
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ page.title }} · {{ site.title }}</title>
+  <link rel="icon" href="{{ site.baseurl }}/favicon.ico" />
+  <link rel="stylesheet" href="{{ site.baseurl }}/assets/css/style.css" />
+</head>
+<body>
+
+  {% include nav.html current="hackinator" %}
+
+  <main class="page">
+    <h1 class="page-title">Hackinator — Sessione di lavoro</h1>
+    <p class="hk-backlink"><a href="{{ site.baseurl }}/hackinator/">← DB Inspector</a></p>
+
+    <section class="hk-section">
+      <h2>Sessione</h2>
+      <div class="hk-toolbar">
+        <input id="hk-session-name" class="hk-select" placeholder="Nome sessione" />
+        <select id="hk-session-template" class="hk-select"></select>
+        <button id="hk-create-session" class="f">Crea sessione</button>
+      </div>
+      <div id="hk-session-info" class="hk-status"></div>
+    </section>
+
+    <section class="hk-section" id="hk-network-section" hidden>
+      <h2>Rete</h2>
+      <div class="hk-toolbar">
+        <input id="hk-network-name" class="hk-select" placeholder="Nome rete" />
+        <input id="hk-network-cidr" class="hk-select" placeholder="CIDR (es. 10.10.10.0/24)" />
+        <button id="hk-create-network" class="f">Crea rete</button>
+      </div>
+      <div id="hk-network-info" class="hk-status"></div>
+    </section>
+
+    <section class="hk-section" id="hk-machine-section" hidden>
+      <h2>Macchina</h2>
+      <div class="hk-toolbar">
+        <input id="hk-machine-name" class="hk-select" placeholder="Nome macchina" />
+        <input id="hk-machine-ip" class="hk-select" placeholder="IP" />
+        <button id="hk-create-machine" class="f">Crea macchina</button>
+      </div>
+      <div id="hk-machine-info" class="hk-status"></div>
+    </section>
+
+    <section class="hk-section" id="hk-network-frontier-section" hidden>
+      <h2>Frontiera — rete</h2>
+      <div id="hk-network-frontier" class="hk-frontier"></div>
+      <div id="hk-network-log" class="hk-log"></div>
+    </section>
+
+    <section class="hk-section" id="hk-machine-frontier-section" hidden>
+      <h2>Frontiera — macchina</h2>
+      <div id="hk-machine-frontier" class="hk-frontier"></div>
+      <div id="hk-machine-log" class="hk-log"></div>
+    </section>
+  </main>
+
+  <script type="module">
+    import {
+      saveSession, saveNetwork, saveMachine, appendEvent,
+      getEventsByNetwork, getEventsByMachine, getTemplate, getAllTemplates
+    } from "{{ site.baseurl }}/assets/js/hackinator/db.js";
+    import { foldEvents, computeFrontier } from "{{ site.baseurl }}/assets/js/hackinator/engine.js";
+
+    const sessionNameEl = document.getElementById("hk-session-name");
+    const templateSelectEl = document.getElementById("hk-session-template");
+    const sessionInfoEl = document.getElementById("hk-session-info");
+
+    const networkSectionEl = document.getElementById("hk-network-section");
+    const networkNameEl = document.getElementById("hk-network-name");
+    const networkCidrEl = document.getElementById("hk-network-cidr");
+    const networkInfoEl = document.getElementById("hk-network-info");
+
+    const machineSectionEl = document.getElementById("hk-machine-section");
+    const machineNameEl = document.getElementById("hk-machine-name");
+    const machineIpEl = document.getElementById("hk-machine-ip");
+    const machineInfoEl = document.getElementById("hk-machine-info");
+
+    const networkFrontierSectionEl = document.getElementById("hk-network-frontier-section");
+    const networkFrontierEl = document.getElementById("hk-network-frontier");
+    const networkLogEl = document.getElementById("hk-network-log");
+
+    const machineFrontierSectionEl = document.getElementById("hk-machine-frontier-section");
+    const machineFrontierEl = document.getElementById("hk-machine-frontier");
+    const machineLogEl = document.getElementById("hk-machine-log");
+
+    let currentSession = null;
+    let currentNetwork = null;
+    let currentMachine = null;
+    let templateNodes = null;
+
+    function setInfo(el, msg, isError) {
+      el.textContent = msg;
+      el.classList.toggle("error", !!isError);
+    }
+
+    async function populateTemplateSelect() {
+      const templates = await getAllTemplates();
+      templateSelectEl.innerHTML = templates
+        .map((t) => `<option value='${JSON.stringify([t.templateId, t.version])}'>${t.templateId} v${t.version}</option>`)
+        .join("");
+    }
+
+    function mkActionButton(label, onClick) {
+      const btn = document.createElement("button");
+      btn.className = "f";
+      btn.textContent = label;
+      btn.addEventListener("click", onClick);
+      return btn;
+    }
+
+    function buildActions(node) {
+      const actions = document.createElement("div");
+      actions.className = "hk-frontier-actions";
+
+      if (node.kind === "check") {
+        actions.appendChild(mkActionButton("Successo", () => resolveCheck(node, "onSuccess")));
+        actions.appendChild(mkActionButton("Fallito", () => resolveCheck(node, "onFailure")));
+        actions.appendChild(mkActionButton("Tentato", () => resolveCheck(node, "onTried")));
+      } else if (node.kind === "question") {
+        (node.answers || []).forEach((answer) => {
+          actions.appendChild(mkActionButton(answer.label, () => resolveQuestion(node, answer)));
+        });
+      }
+
+      return actions;
+    }
+
+    function renderFrontierItem(node) {
+      const item = document.createElement("div");
+      item.className = "hk-frontier-item";
+
+      const text = document.createElement("div");
+      text.className = "hk-frontier-text";
+      text.textContent = `[${node.level}] ${node.text}`;
+      item.appendChild(text);
+      item.appendChild(buildActions(node));
+
+      return item;
+    }
+
+    function baseEventFields(node) {
+      return {
+        sessionId: currentSession.id,
+        networkId: currentNetwork.id,
+        machineId: node.level === "machine" ? currentMachine.id : null,
+        level: node.level,
+        ts: Date.now(),
+        elementId: node.id,
+        elementKind: node.kind
+      };
+    }
+
+    async function resolveCheck(node, outcome) {
+      const label = outcome === "onSuccess" ? "Successo" : outcome === "onFailure" ? "Fallito" : "Tentato";
+      if (!confirm(`Confermi "${label}" per "${node.text}"?`)) return;
+
+      const block = node[outcome] || { set: {} };
+      const scope = block.scope || node.level;
+      const writeScopes = {};
+      for (const key of Object.keys(block.set)) writeScopes[key] = scope;
+
+      const status = outcome === "onSuccess" ? "success" : outcome === "onFailure" ? "failure" : "tried";
+
+      await appendEvent({
+        ...baseEventFields(node),
+        status,
+        answerLabel: null,
+        value: null,
+        writes: block.set,
+        writeScopes,
+        evidence: { command: node.command || "", notes: "", output: "", photoRef: null }
+      });
+
+      await refreshFrontiers(node.level);
+    }
+
+    async function resolveQuestion(node, answer) {
+      if (!confirm(`Confermi la risposta "${answer.label}" per "${node.text}"?`)) return;
+
+      const set = answer.set || {};
+      const writeScopes = {};
+      for (const key of Object.keys(set)) writeScopes[key] = node.level;
+
+      await appendEvent({
+        ...baseEventFields(node),
+        status: "answered",
+        answerLabel: answer.label,
+        value: null,
+        writes: set,
+        writeScopes,
+        evidence: { command: "", notes: "", output: "", photoRef: null }
+      });
+
+      await refreshFrontiers(node.level);
+    }
+
+    function renderResolvedList(el, events) {
+      el.innerHTML = "";
+      events.forEach((event) => {
+        const node = templateNodes[event.elementId];
+        if (!node) return;
+
+        const item = document.createElement("div");
+        item.className = "hk-log-item";
+
+        const row = document.createElement("div");
+        row.className = "hk-log-row";
+        row.textContent = `${event.elementId} → ${event.status}${event.answerLabel ? ` (${event.answerLabel})` : ""}`;
+        item.appendChild(row);
+
+        const correctBtn = mkActionButton("Correggi", () => {
+          correctBtn.remove();
+          item.appendChild(buildActions(node));
+        });
+        correctBtn.classList.add("hk-correct-btn");
+        row.appendChild(correctBtn);
+
+        el.appendChild(item);
+      });
+    }
+
+    async function renderNetworkFrontier() {
+      const events = await getEventsByNetwork(currentNetwork.id);
+      const netOnly = events.filter((e) => e.machineId === null);
+      const state = foldEvents(netOnly);
+      const doneIds = new Set(netOnly.map((e) => e.elementId));
+      const nodes = Object.values(templateNodes).filter((n) => n.level === "network");
+      const frontier = computeFrontier(nodes, state, doneIds);
+
+      networkFrontierEl.innerHTML = "";
+      frontier.forEach((node) => networkFrontierEl.appendChild(renderFrontierItem(node)));
+      renderResolvedList(networkLogEl, netOnly);
+    }
+
+    async function renderMachineFrontier() {
+      const networkEvents = await getEventsByNetwork(currentNetwork.id);
+      const netOnly = networkEvents.filter((e) => e.machineId === null);
+      const machineEvents = await getEventsByMachine(currentMachine.id);
+      const merged = [...netOnly, ...machineEvents].sort((a, b) => a.seq - b.seq);
+      const state = foldEvents(merged);
+      const doneIds = new Set(machineEvents.map((e) => e.elementId));
+      const nodes = Object.values(templateNodes).filter((n) => n.level === "machine");
+      const frontier = computeFrontier(nodes, state, doneIds);
+
+      machineFrontierEl.innerHTML = "";
+      frontier.forEach((node) => machineFrontierEl.appendChild(renderFrontierItem(node)));
+      renderResolvedList(machineLogEl, machineEvents);
+    }
+
+    async function refreshFrontiers(level) {
+      await renderNetworkFrontier();
+      if (currentMachine) await renderMachineFrontier();
+    }
+
+    async function createSession() {
+      const name = sessionNameEl.value.trim();
+      if (!name) { setInfo(sessionInfoEl, "Inserisci un nome sessione.", true); return; }
+      if (!templateSelectEl.value) { setInfo(sessionInfoEl, "Nessun template disponibile — importalo dal DB Inspector.", true); return; }
+
+      const [templateId, version] = JSON.parse(templateSelectEl.value);
+      const template = await getTemplate(templateId, version);
+      templateNodes = template.nodes;
+
+      currentSession = {
+        id: "sess_" + Date.now(),
+        name,
+        templateId,
+        templateVersion: version,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      await saveSession(currentSession);
+
+      setInfo(sessionInfoEl, `Sessione "${currentSession.name}" creata (${currentSession.id}).`);
+      networkSectionEl.hidden = false;
+    }
+
+    async function createNetwork() {
+      const name = networkNameEl.value.trim();
+      const cidr = networkCidrEl.value.trim();
+      if (!name) { setInfo(networkInfoEl, "Inserisci un nome rete.", true); return; }
+
+      currentNetwork = {
+        id: "net_" + Date.now(),
+        sessionId: currentSession.id,
+        name,
+        cidr,
+        notes: "",
+        createdAt: Date.now()
+      };
+      await saveNetwork(currentNetwork);
+
+      setInfo(networkInfoEl, `Rete "${currentNetwork.name}" creata (${currentNetwork.id}).`);
+      machineSectionEl.hidden = false;
+      networkFrontierSectionEl.hidden = false;
+      await renderNetworkFrontier();
+    }
+
+    async function createMachine() {
+      const name = machineNameEl.value.trim();
+      const ip = machineIpEl.value.trim();
+      if (!name) { setInfo(machineInfoEl, "Inserisci un nome macchina.", true); return; }
+
+      currentMachine = {
+        id: "mach_" + Date.now(),
+        networkId: currentNetwork.id,
+        sessionId: currentSession.id,
+        name,
+        ip,
+        os: "unknown",
+        notes: "",
+        createdAt: Date.now()
+      };
+      await saveMachine(currentMachine);
+
+      setInfo(machineInfoEl, `Macchina "${currentMachine.name}" creata (${currentMachine.id}).`);
+      machineFrontierSectionEl.hidden = false;
+      await renderMachineFrontier();
+    }
+
+    document.getElementById("hk-create-session").addEventListener("click", createSession);
+    document.getElementById("hk-create-network").addEventListener("click", createNetwork);
+    document.getElementById("hk-create-machine").addEventListener("click", createMachine);
+
+    populateTemplateSelect();
+  </script>
+
+</body>
+</html>

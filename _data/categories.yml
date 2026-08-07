@@ -1,0 +1,118 @@
+- Web Vulnerabilities
+- XSS (Cross-Site Scripting)
+- SQL Injection (SQLi)
+- NoSQL Injection
+- Command Injection
+- LDAP Injection
+- XXE (XML External Entity)
+- SSRF (Server-Side Request Forgery)
+- CSRF (Cross-Site Request Forgery)
+- SSTI (Server-Side Template Injection)
+- CSTI (Client-Side Template Injection)
+- Open Redirect
+- LFI (Local File Inclusion)
+- RFI (Remote File Inclusion)
+- Path Traversal / Directory Traversal
+- File Upload
+- IDOR (Insecure Direct Object Reference)
+- Broken Access Control
+- Broken Authentication
+- HTTP Request Smuggling
+- Web Cache Poisoning
+- CRLF Injection
+- Prototype Pollution
+- Deserialization
+- GraphQL Injection
+- CORS Misconfiguration
+- Race Condition
+- Mass Assignment
+- Business Logic
+- Authentication & Credentials
+- Password Cracking
+- Brute Force
+- Password Spraying
+- Default Credentials
+- Credential Stuffing
+- Hash Cracking
+- Pass-the-Hash
+- Pass-the-Ticket
+- JWT Attacks
+- Session Hijacking
+- 2FA Bypass
+- Privilege Escalation (Linux)
+- SUID / SGID
+- Sudo Abuse
+- Cron Jobs
+- Capabilities
+- Kernel Exploit
+- PATH Hijacking
+- Wildcard Injection
+- Docker Escape
+- LXC/LXD
+- Writable /etc/passwd
+- NFS no_root_squash
+- Python Library Hijacking
+- Shared Object Injection
+- Privilege Escalation (Windows)
+- Unquoted Service Path
+- Weak Service Permissions
+- DLL Hijacking
+- AlwaysInstallElevated
+- Token Impersonation
+- Potato Attacks (Juicy/Rogue/PrintSpoofer)
+- SeImpersonate / SeBackup / SeDebug
+- UAC Bypass
+- Registry Exploits
+- Autologon Credentials
+- Scheduled Tasks
+- Active Directory
+- Kerberoasting
+- AS-REP Roasting
+- Golden Ticket
+- Silver Ticket
+- DCSync
+- DCShadow
+- Overpass-the-Hash
+- Unconstrained Delegation
+- Constrained Delegation
+- Resource-Based Constrained Delegation (RBCD)
+- ACL Abuse
+- GPO Abuse
+- LLMNR/NBT-NS Poisoning
+- SMB Relay
+- NTLM Relay
+- BloodHound
+- Zerologon
+- PrintNightmare
+- NoPac
+- Shadow Credentials
+- ADCS Attacks (ESC1-ESC8)
+- Network & Services
+- SMB Exploitation
+- SNMP Enumeration
+- FTP Anonymous
+- NFS Misconfiguration
+- RPC Enumeration
+- DNS Zone Transfer
+- Port Forwarding / Tunneling
+- Pivoting
+- MITM (Man-in-the-Middle)
+- Exploitation & Code Execution
+- RCE (Remote Code Execution)
+- Buffer Overflow
+- CVE Exploit
+- Reverse Shell
+- Web Shell
+- Public Exploit (Exploit-DB)
+- Memory Corruption
+- ROP (Return-Oriented Programming)
+- Format String
+- Crypto & Misc
+- Weak Cryptography
+- Encoding / Decoding
+- Steganography
+- Information Disclosure
+- Enumeration
+- Misconfiguration
+- Cleartext Credentials
+- Sensitive Data Exposure

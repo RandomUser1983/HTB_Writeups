@@ -1,0 +1,276 @@
+---
+layout: none
+title: Hackinator
+permalink: /hackinator/
+---
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ page.title }} · {{ site.title }}</title>
+  <link rel="icon" href="{{ site.baseurl }}/favicon.ico" />
+  <link rel="stylesheet" href="{{ site.baseurl }}/assets/css/style.css" />
+</head>
+<body>
+
+  {% include nav.html current="hackinator" %}
+
+  <main class="page">
+    <h1 class="page-title">Hackinator — DB Inspector</h1>
+    <p class="hk-backlink"><a href="{{ site.baseurl }}/hackinator/session/">→ Sessione di lavoro</a></p>
+
+    <div class="hk-toolbar">
+      <select id="hk-template-select" class="hk-select">
+        {% assign template_files = site.static_files | where_exp: "f", "f.path contains '/assets/templates/'" %}
+        {% for f in template_files %}
+          <option value="{{ site.baseurl }}{{ f.path }}">{{ f.name }}</option>
+        {% endfor %}
+      </select>
+      <button id="hk-import-template" class="f">Carica template</button>
+    </div>
+
+    <div class="hk-toolbar">
+      <span class="hk-label">Inserisci record di test:</span>
+      <button id="hk-test-session" class="f">Sessione</button>
+      <button id="hk-test-network" class="f">Rete</button>
+      <button id="hk-test-machine" class="f">Macchina</button>
+      <button id="hk-test-event" class="f">Evento</button>
+      <button id="hk-test-asset" class="f">Asset</button>
+      <button id="hk-test-cred" class="f">Cred</button>
+    </div>
+
+    <div class="hk-toolbar">
+      <button id="hk-load" class="f">Carica tabelle</button>
+      <button id="hk-clear" class="f">Cancella tutto</button>
+    </div>
+
+    <div id="hk-status" class="hk-status"></div>
+
+    <div class="hk-inspector">
+      <div id="hk-tables"></div>
+      <textarea id="hk-raw" class="hk-raw" readonly placeholder="Clicca una tabella per vedere il contenuto raw"></textarea>
+    </div>
+  </main>
+
+  <script type="module">
+    import {
+      openDB, deleteDB, saveTemplate,
+      saveSession, saveNetwork, saveMachine, appendEvent, saveAsset, saveCred
+    } from "{{ site.baseurl }}/assets/js/hackinator/db.js";
+
+    let lastEventSeq = null;
+
+    const statusEl = document.getElementById("hk-status");
+    const tablesEl = document.getElementById("hk-tables");
+    const rawEl = document.getElementById("hk-raw");
+
+    function setStatus(msg, isError) {
+      statusEl.textContent = msg;
+      statusEl.classList.toggle("error", !!isError);
+    }
+
+    function countStore(db, name) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(name, "readonly");
+        const req = tx.objectStore(name).count();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function loadTables() {
+      setStatus("Apertura database...");
+      tablesEl.innerHTML = "";
+      try {
+        const db = await openDB();
+        const names = Array.from(db.objectStoreNames);
+        const rows = await Promise.all(
+          names.map(async (name) => ({ name, count: await countStore(db, name) }))
+        );
+        db.close();
+
+        const table = document.createElement("table");
+        table.className = "hk-table";
+        table.innerHTML =
+          "<thead><tr><th>Tabella</th><th>Record</th></tr></thead>" +
+          "<tbody>" +
+          rows.map((r) => `<tr data-store="${r.name}"><td>${r.name}</td><td>${r.count}</td></tr>`).join("") +
+          "</tbody>";
+        tablesEl.appendChild(table);
+        setStatus(`${names.length} tabelle caricate.`);
+      } catch (err) {
+        setStatus(`Errore: ${err.message}`, true);
+      }
+    }
+
+    function jsonReplacer(key, value) {
+      if (value instanceof Blob) {
+        return `<Blob ${value.type || "unknown"}, ${value.size} bytes>`;
+      }
+      return value;
+    }
+
+    async function showRawStore(storeName) {
+      setStatus(`Lettura di "${storeName}"...`);
+      try {
+        const db = await openDB();
+        const records = await new Promise((resolve, reject) => {
+          const req = db.transaction(storeName, "readonly").objectStore(storeName).getAll();
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+        db.close();
+        rawEl.value = JSON.stringify(records, jsonReplacer, 2);
+        setStatus(`${storeName}: ${records.length} record.`);
+      } catch (err) {
+        setStatus(`Errore: ${err.message}`, true);
+      }
+    }
+
+    tablesEl.addEventListener("click", (e) => {
+      const tr = e.target.closest("tr[data-store]");
+      if (tr) showRawStore(tr.dataset.store);
+    });
+
+    async function clearAll() {
+      if (!confirm("Cancellare l'intero database Hackinator? L'operazione è irreversibile.")) return;
+      setStatus("Cancellazione in corso...");
+      try {
+        await deleteDB();
+        tablesEl.innerHTML = "";
+        setStatus("Database cancellato.");
+      } catch (err) {
+        setStatus(`Errore: ${err.message}`, true);
+      }
+    }
+
+    async function importTemplate() {
+      const select = document.getElementById("hk-template-select");
+      const url = select.value;
+      if (!url) {
+        setStatus("Nessun template presente in assets/templates/.", true);
+        return;
+      }
+
+      setStatus("Import in corso...");
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`fetch fallita (${res.status})`);
+        const parsed = await res.json();
+        await saveTemplate({ ...parsed, frozenAt: Date.now() });
+        setStatus(`Template "${parsed.templateId}" v${parsed.version} salvato.`);
+        await loadTables();
+      } catch (err) {
+        setStatus(`Errore: ${err.message}`, true);
+      }
+    }
+
+    async function runTest(label, fn) {
+      try {
+        const result = await fn();
+        setStatus(`${label} salvato.`);
+        await loadTables();
+        return result;
+      } catch (err) {
+        setStatus(`Errore: ${err.message}`, true);
+      }
+    }
+
+    document.getElementById("hk-test-session").addEventListener("click", () =>
+      runTest("Sessione di test", () => saveSession({
+        id: "sess_test",
+        name: "Sessione di test",
+        templateId: "dummy_test",
+        templateVersion: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }))
+    );
+
+    document.getElementById("hk-test-network").addEventListener("click", () =>
+      runTest("Rete di test", () => saveNetwork({
+        id: "net_test",
+        sessionId: "sess_test",
+        name: "Rete di test",
+        cidr: "10.10.10.0/24",
+        notes: "",
+        createdAt: Date.now()
+      }))
+    );
+
+    document.getElementById("hk-test-machine").addEventListener("click", () =>
+      runTest("Macchina di test", () => saveMachine({
+        id: "mach_test",
+        networkId: "net_test",
+        sessionId: "sess_test",
+        name: "Macchina di test",
+        ip: "10.10.10.5",
+        os: "linux",
+        notes: "",
+        createdAt: Date.now()
+      }))
+    );
+
+    document.getElementById("hk-test-event").addEventListener("click", async () => {
+      const seq = await runTest("Evento di test", () => appendEvent({
+        sessionId: "sess_test",
+        networkId: "net_test",
+        machineId: null,
+        level: "network",
+        ts: Date.now(),
+        elementId: "chk_live_hosts",
+        elementKind: "check",
+        status: "success",
+        answerLabel: null,
+        value: null,
+        writes: { hostsEnumerated: true },
+        writeScopes: { hostsEnumerated: "network" },
+        evidence: {
+          command: "nmap -sn 10.10.10.0/24",
+          notes: "",
+          output: "5 hosts up",
+          photoRef: null
+        }
+      }));
+      if (seq !== undefined) lastEventSeq = seq;
+    });
+
+    document.getElementById("hk-test-asset").addEventListener("click", () =>
+      runTest("Asset di test", () => saveAsset({
+        id: "asset_test",
+        sessionId: "sess_test",
+        networkId: "net_test",
+        machineId: null,
+        eventSeq: lastEventSeq,
+        blob: new Blob(["dummy content"], { type: "text/plain" }),
+        mime: "text/plain",
+        filename: "dummy.txt",
+        createdAt: Date.now()
+      }))
+    );
+
+    document.getElementById("hk-test-cred").addEventListener("click", () =>
+      runTest("Cred di test", () => saveCred({
+        id: "cred_test",
+        sessionId: "sess_test",
+        networkId: "net_test",
+        sourceMachineId: "mach_test",
+        sourceEventSeq: lastEventSeq,
+        type: "password",
+        username: "test_user",
+        secret: "dummy_password",
+        domain: "",
+        notes: "",
+        createdAt: Date.now()
+      }))
+    );
+
+    document.getElementById("hk-import-template").addEventListener("click", importTemplate);
+    document.getElementById("hk-load").addEventListener("click", loadTables);
+    document.getElementById("hk-clear").addEventListener("click", clearAll);
+
+    loadTables();
+  </script>
+
+</body>
+</html>

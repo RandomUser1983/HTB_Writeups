@@ -1,0 +1,53 @@
+{
+  "templateId": "dummy_test",
+  "version": 1,
+  "meta": {
+    "name": "Dummy test template",
+    "description": "Template minimale per testare motore, condizioni e frontiera. Un check di rete, una question di macchina che sblocca un check."
+  },
+  "nodes": {
+    "chk_live_hosts": {
+      "id": "chk_live_hosts",
+      "kind": "check",
+      "level": "network",
+      "text": "Discover live hosts",
+      "condition": { "all": [] },
+      "onSuccess": { "set": { "hostsEnumerated": true }, "scope": "network" },
+      "onFailure": { "set": {} },
+      "onTried": { "set": {} },
+      "command": "# ICMP sweep\nnmap -sn 10.10.10.0/24\n\n# TCP scan top 100 ports\nnmap -sS --top-ports 100 10.10.10.0/24\n\n# UDP scan top 10 ports\nnmap -sU --top-ports 10 10.10.10.0/24",
+      "notes": "Run all three to catch hosts that block ICMP. UDP is slow, top 10 is enough for a first pass.",
+      "evidence": { "output": "", "photo": null },
+      "prompt": null,
+      "phase": "recon"
+    },
+    "q_reachable": {
+      "id": "q_reachable",
+      "kind": "question",
+      "level": "machine",
+      "text": "Can you reach the machine?",
+      "condition": { "all": [] },
+      "answers": [
+        { "label": "Yes", "set": { "isReachable": true } },
+        { "label": "No", "set": { "isReachable": false } }
+      ],
+      "children": ["chk_enum_ports"],
+      "phase": "recon"
+    },
+    "chk_enum_ports": {
+      "id": "chk_enum_ports",
+      "kind": "check",
+      "level": "machine",
+      "text": "Enumerate open ports",
+      "condition": { "all": ["isReachable"] },
+      "onSuccess": { "set": { "portsEnumerated": true }, "scope": "machine" },
+      "onFailure": { "set": {} },
+      "onTried": { "set": {} },
+      "command": "# Full TCP SYN scan\nnmap -sS -p- -T4 10.10.10.5\n\n# Service and version detection on found ports\nnmap -sCV -p <ports> 10.10.10.5",
+      "notes": "Full port sweep first, then targeted service detection on whatever is open.",
+      "evidence": { "output": "", "photo": null },
+      "prompt": null,
+      "phase": "recon"
+    }
+  }
+}
